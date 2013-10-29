@@ -37,8 +37,16 @@
 	(define-key map (kbd "q") 'sc-quit)
 	map))
 
+(setq sc-mode-keywords
+	  '(("[0-9]+\: " . font-lock-variable-name-face)
+		("\[-+\]" . font-lock-builtin-face)
+		(".*\n=+\n" . font-lock-constant-face)
+		("\\[.*/.*\\]" . font-lock-variable-name-face)))
+
 (define-derived-mode soundcloud-mode special-mode "SoundCloud"
   (buffer-disable-undo)
+  (setq font-lock-defaults '(sc-mode-keywords))
+  (setq mode-name "soundcloud")
   (setq truncate-lines t))
 
 (easy-menu-define soundcloud-mode-menu soundcloud-mode-map
@@ -156,7 +164,7 @@
 	(let* ((track (elt *sc-current-tracks* *sc-track-num*))
 		   (progress (/ (float emms-playing-time) (/ (gethash "duration" track) 1000)))
 		   (progress-bar-size (- (window-body-width) 5))
-		   (completes (floor (* progress-bar-size progress)))
+		   (completes (min progress-bar-size (floor (* progress-bar-size progress))))
 		   (incompletes (- progress-bar-size completes)))
 	  (format "[%s%s]"
 			  (string-utils-string-repeat "-" completes)
@@ -187,7 +195,7 @@
 			  (format-seconds (/ (gethash "duration" track) 1000))))))
 
 (defun format-seconds (seconds)
-  (format "%d:%d" (floor (/ seconds 60)) (mod seconds 60)))
+  (format "%02d:%02d" (floor (/ seconds 60)) (mod seconds 60)))
 
 (defun update-now-playing ()
   (deferred:$
