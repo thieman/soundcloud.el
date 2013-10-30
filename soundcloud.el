@@ -3,12 +3,12 @@
 ;; Copyright (C) 2013 Travis Thieman
 
 ;; GitHub: https://github.com/tthieman/soundcloud.el
-
 ;; Author: Travis Thieman <travis.thieman@gmail.com>
+
+;; Package: soundcloud
 ;; Version: 20131031
 ;; Package-Requires: ((emms "20131016") (json "1.4") (deferred "20130930") (string-utils "20131022"))
 ;; Keywords: soundcloud music audio
-;; Package: soundcloud
 
 ;; This code is licensed under the WTFPL.
 
@@ -26,8 +26,6 @@
 
 ;;  0. You just DO WHAT THE FUCK YOU WANT TO.
 
-;;; Code:
-
 (require 'emms)
 (require 'emms-playing-time)
 (require 'json)
@@ -41,11 +39,18 @@
 (emms-playing-time 1)
 (add-hook 'emms-player-finished-hook 'sc-play-next-track)
 
-(setq sc-client-id "0ef9cd3d5b707698df18f2c22db1714b")
-(setq sc-url "http://soundcloud.com")
-(setq sc-api "http://api.soundcloud.com")
+(defvar sc-client-id "0ef9cd3d5b707698df18f2c22db1714b")
+(defvar sc-url "http://soundcloud.com")
+(defvar sc-api "http://api.soundcloud.com")
 
-(setq track-start-line 10)
+(defvar sc-track-start-line 10)
+
+(defvar *sc-current-artist* "")
+(defvar *sc-current-tracks* ())
+(defvar *sc-search-results* ())
+(defvar *sc-track-num* -1)
+(defvar *sc-track* nil)
+(defvar *sc-playing* nil)
 
 (defun sc-clear-globals ()
   (setq *sc-current-artist* "")
@@ -132,7 +137,7 @@
 
 (defun get-json-from-request (buf)
   (let ((data (get-data-from-request buf)))
-	(lexical-let ((json-object-type 'hash-table))
+	(let ((json-object-type 'hash-table))
 	  (json-read-from-string data))))
 
 (defun get-stream-url (track-id)
@@ -207,10 +212,10 @@
 								(gethash "username" (gethash "user" (elt *sc-current-tracks* 0)))
 								*sc-current-artist*)))
 	  (mapc 'inl (list title-string (string-utils-string-repeat "=" (length title-string)) "")))
-	(let ((idx 1))
+	(let ((*sc-idx* 1))
 	  (mapc 'track-listing *sc-current-tracks*))
 	(goto-char (point-min))
-	(dotimes (i (- track-start-line 1)) (next-line))
+	(dotimes (i (- sc-track-start-line 1)) (next-line))
 	(beginning-of-line)))
 
 (defun draw-sc-artist-search-buffer (results)
@@ -222,10 +227,10 @@
 	(goto-char (point-max))
 	(let ((title-string "Search Results"))
 	  (mapc 'inl (list title-string (string-utils-string-repeat "=" (length title-string)) "")))
-	(let ((idx 1))
+	(let ((*sc-idx* 1))
 	  (mapc 'search-listing results))
 	(goto-char (point-min))
-	(dotimes (i (- track-start-line 1)) (next-line))
+	(dotimes (i (- sc-track-start-line 1)) (next-line))
 	(beginning-of-line)))
 
 (defun draw-now-playing ()
@@ -253,15 +258,15 @@
 
 (defun track-listing (track)
   "Prints info for a track, followed by a newline."
-  (insert (format "%02d: %s" idx (gethash "title" track)))
+  (insert (format "%02d: %s" *sc-idx* (gethash "title" track)))
   (newline)
-  (setq idx (+ idx 1)))
+  (setq *sc-idx* (+ *sc-idx* 1)))
 
 (defun search-listing (result)
   "Prints info for a search result, followed by a newline."
-  (insert (format "%02d: %s" idx (gethash "username" result)))
+  (insert (format "%02d: %s" *sc-idx* (gethash "username" result)))
   (newline)
-  (setq idx (+ idx 1)))
+  (setq *sc-idx* (+ *sc-idx* 1)))
 
 ;;;; private player commands
 
@@ -296,10 +301,7 @@
 			  (gethash "username" (gethash "user" *sc-track*))
 			  (gethash "title" *sc-track*)
 			  (string-utils-trim-whitespace emms-playing-time-string)
-			  (format-seconds (/ (gethash "duration" *sc-track*) 1000)))))
-
-(defun format-seconds (seconds)
-  (format "%02d:%02d" (floor (/ seconds 60)) (mod seconds 60)))
+			  (format-seconds "%.2m:%.2s" (/ (gethash "duration" *sc-track*) 1000)))))
 
 (defun update-now-playing ()
   (deferred:$
@@ -320,6 +322,7 @@
 
 ;;;; interactive commmands
 
+;;;###autoload
 (defun soundcloud ()
   (interactive)
   (let ((exists (not (equal nil (get-buffer "*soundcloud*")))))
@@ -352,7 +355,8 @@
 (defun sc-goto-artist ()
   (interactive)
   (let ((result-num (get-current-line-result-number)))
-	(sc-load-artist-by-name (gethash "permalink" (elt *sc-search-results* (- result-num 1))))))
+	(sc-load-artist-by-name (gethash "permalink" (elt *sc-search-results* (- result-num 1))))
+	(beginning-of-line)))
 
 (defun sc-pause ()
   (interactive)
@@ -385,3 +389,5 @@
 	(sc-play-current-track)))
 
 (provide 'soundcloud)
+
+;;; soundcloud.el ends here
