@@ -19,9 +19,16 @@
 (setq *sc-current-artist* "")
 (setq *sc-current-tracks* ())
 (setq *sc-track-num* -1)
+(setq *sc-track* nil)
 (setq *sc-playing* nil)
 
 (defun inl (text) (insert text) (newline))
+(defun safe-next-line ()
+  (if (= (line-end-position) (point-max)) nil (next-line)))
+(defun delete-line ()
+  (let ((start (line-beginning-position))
+		(end (progn (safe-next-line) (line-beginning-position))))
+	(delete-region start end)))
 
 ;;; soundcloud-mode
 
@@ -38,10 +45,10 @@
 	map))
 
 (setq sc-mode-keywords
-	  '(("[0-9]+\: " . font-lock-variable-name-face)
-		("\[-+\]" . font-lock-builtin-face)
-		(".*\n=+\n" . font-lock-constant-face)
-		("\\[.*/.*\\]" . font-lock-variable-name-face)))
+	  '(("[0-9]+\: " . font-lock-variable-name-face)  ;; track numbers
+		("\[-+\]" . font-lock-builtin-face)  ;; progress bar
+		(".*\n=+\n" . font-lock-constant-face)  ;; headings
+		("\\[.*/.*\\]" . font-lock-variable-name-face)))  ;; track timer
 
 (define-derived-mode soundcloud-mode special-mode "SoundCloud"
   (buffer-disable-undo)
@@ -108,6 +115,12 @@
 		(deferred:url-retrieve (replace-regexp-in-string ".json" "/tracks.json" resolved))))
 	(deferred:nextc it 'get-json-from-request)))
 
+(defun search-artist-by-query (artist-query)
+  (deferred:$
+	(deferred:url-retrieve (format "%s/users.json?q=%s&client_id=%s"
+								   sc-api artist-query sc-client-id))
+	(deferred:nextc it 'get-json-from-request)))
+
 ;;;; the *soundcloud* buffer
 
 (defun switch-to-sc-buffer ()
@@ -147,23 +160,30 @@
 	(dotimes (i (- track-start-line 1)) (next-line))
 	(beginning-of-line)))
 
+(defun draw-sc-artist-search-buffer (results)
+  "Empty the current buffer and fill it with search info for a given artist."
+  (let ((inhibit-read-only t))
+	(erase-buffer)
+	(draw-now-playing)
+	(goto-char (point-max))
+
 (defun draw-now-playing ()
   (with-current-buffer "*soundcloud*"
 	(let ((inhibit-read-only t)
 		  (current-line (line-number-at-pos)))
 	  (goto-char (point-min))
-	  (mapc 'kill-line (make-list 6 1))
+	  (dotimes (i 6) (delete-line))
+	  (goto-char (point-min))
 	  (mapc 'inl (list "Now Playing" "===========" "" (current-track-detail) (song-progress-bar) ""))
 	  (goto-char (point-min))
 	  (dotimes (i (- current-line 1)) (next-line))
 	  (beginning-of-line))))
 
 (defun song-progress-bar ()
-  (if (= -1 *sc-track-num*)
+  (if (equal nil *sc-track*)
 	  ""
-	(let* ((track (elt *sc-current-tracks* *sc-track-num*))
-		   (progress (/ (float emms-playing-time) (/ (gethash "duration" track) 1000)))
-		   (progress-bar-size (- (window-body-width) 5))
+	(let* ((progress (/ (float emms-playing-time) (/ (gethash "duration" *sc-track*) 1000)))
+		   (progress-bar-size (- (window-body-width) 2))
 		   (completes (min progress-bar-size (floor (* progress-bar-size progress))))
 		   (incompletes (- progress-bar-size completes)))
 	  (format "[%s%s]"
@@ -180,19 +200,19 @@
 
 (defun sc-play-current-track ()
   (setq *sc-playing* t)
+  (setq *sc-track* (elt *sc-current-tracks* *sc-track-num*))
   (draw-now-playing)
-  (play-track-id (gethash "id" (elt *sc-current-tracks* *sc-track-num*))))
+  (play-track-id (gethash "id" *sc-track*)))
 
 (defun current-track-detail ()
   "Returns string of detailed info for the current track."
-  (if (= -1 *sc-track-num*)
+  (if (equal nil *sc-track*)
 	  "No Track Selected"
-	(let ((track (elt *sc-current-tracks* *sc-track-num*)))
-	  (format "%s : %s      [%s/ %s ]"
-			  (gethash "username" (gethash "user" track))
-			  (gethash "title" track)
-			  emms-playing-time-string
-			  (format-seconds (/ (gethash "duration" track) 1000))))))
+	  (format "%s : %s      [ %s / %s ]"
+			  (gethash "username" (gethash "user" *sc-track*))
+			  (gethash "title" *sc-track*)
+			  (string-utils-trim-whitespace emms-playing-time-string)
+			  (format-seconds (/ (gethash "duration" *sc-track*) 1000)))))
 
 (defun format-seconds (seconds)
   (format "%02d:%02d" (floor (/ seconds 60)) (mod seconds 60)))
@@ -202,7 +222,7 @@
 	(deferred:wait 500)
 	(deferred:nextc it
 	  (lambda (x)
-		(when (and *sc-playing* (equal "*soundcloud*" (buffer-name (current-buffer))))
+		(when (and *sc-playing* (equal nil (active-minibuffer-window)))
 		  (draw-now-playing))
 		(update-now-playing)))))
 
@@ -228,6 +248,16 @@
 		  (switch-to-sc-buffer)
 		  (draw-sc-artist-buffer tracks))))))
 
+(defun sc-search-artist ()
+  (interactive)
+  (lexical-let ((artist-query (read-from-minibuffer "Search for artist: ")))
+	(deferred:$
+	  (search-artist-by-query artist-query)
+	  (deferred:nextc it
+		(lambda (results)
+		  (switch-to-sc-buffer)
+		  (draw-sc-artist-search-buffer results))))))
+
 (defun sc-play-track ()
   (interactive)
   (sc-stop)
@@ -235,7 +265,6 @@
   (re-search-forward "[0-9]+" nil 'move)
   (setq *sc-track-num* (- (string-to-number (buffer-substring-no-properties (line-beginning-position) (point))) 1))
   (sc-play-current-track)
-  (play-track-id (gethash "id" (elt *sc-current-tracks* *sc-track-num*)))
   (beginning-of-line))
 
 (defun sc-pause ()
@@ -256,9 +285,11 @@
 
 (defun sc-play-next-track ()
   (interactive)
-  (unless (or (= -1 *sc-track-num*) (= (length *sc-current-tracks*) (+ 1 *sc-track-num*)))
-	(setq *sc-track-num* (+ 1 *sc-track-num*))
-	(sc-play-current-track)))
+  (if (or (= -1 *sc-track-num*) (= (length *sc-current-tracks*) (+ 1 *sc-track-num*)))
+	(setq *sc-track* nil)
+	(progn
+	  (setq *sc-track-num* (+ 1 *sc-track-num*))
+	  (sc-play-current-track))))
 
 (defun sc-play-previous-track ()
   (interactive)
