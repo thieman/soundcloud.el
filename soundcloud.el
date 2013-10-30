@@ -1,3 +1,33 @@
+;;; soundcloud.el --- a SoundCloud client for Emacs
+
+;; Copyright (C) 2013 Travis Thieman
+
+;; GitHub: https://github.com/tthieman/soundcloud.el
+
+;; Author: Travis Thieman <travis.thieman@gmail.com>
+;; Version: 20131031
+;; Package-Requires: ((emms "20131016") (json "1.4") (deferred "20130930") (string-utils "20131022"))
+;; Keywords: soundcloud music audio
+;; Package: soundcloud
+
+;; This code is licensed under the WTFPL.
+
+;;            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+;;                    Version 2, December 2004
+
+;; Copyright (C) 2013 Travis Thieman <travis.thieman@gmail.com>
+
+;; Everyone is permitted to copy and distribute verbatim or modified
+;; copies of this license document, and changing it is allowed as long
+;; as the name is changed.
+
+;;            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+;;   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+;;  0. You just DO WHAT THE FUCK YOU WANT TO.
+
+;;; Code:
+
 (require 'emms)
 (require 'emms-playing-time)
 (require 'json)
@@ -235,11 +265,28 @@
 
 ;;;; private player commands
 
+(defun get-current-line-result-number ()
+  (beginning-of-line)
+  (re-search-forward "[0-9]+" nil 'move)
+  (string-to-number (buffer-substring-no-properties (line-beginning-position) (point))))
+
 (defun sc-play-current-track ()
   (setq *sc-playing* t)
   (setq *sc-track* (elt *sc-current-tracks* *sc-track-num*))
   (draw-now-playing)
   (play-track-id (gethash "id" *sc-track*)))
+
+(defun sc-load-artist-by-name (artist-name)
+  (lexical-let ((artist-name artist-name))
+	(deferred:$
+	  (get-artist-tracks-by-name artist-name)
+	  (deferred:nextc it
+		(lambda (tracks)
+		  (setq *sc-current-artist* artist-name)
+		  (setq *sc-current-tracks* tracks)
+		  (setq *sc-track-num* -1)
+		  (switch-to-sc-buffer)
+		  (draw-sc-artist-buffer tracks))))))
 
 (defun current-track-detail ()
   "Returns string of detailed info for the current track."
@@ -284,18 +331,6 @@
   (lexical-let ((artist-name (read-from-minibuffer "Artist name: ")))
 	(sc-load-artist-by-name artist-name)))
 
-(defun sc-load-artist-by-name (artist-name)
-  (lexical-let ((artist-name artist-name))
-	(deferred:$
-	  (get-artist-tracks-by-name artist-name)
-	  (deferred:nextc it
-		(lambda (tracks)
-		  (setq *sc-current-artist* artist-name)
-		  (setq *sc-current-tracks* tracks)
-		  (setq *sc-track-num* -1)
-		  (switch-to-sc-buffer)
-		  (draw-sc-artist-buffer tracks))))))
-
 (defun sc-search-artist ()
   (interactive)
   (lexical-let ((artist-query (read-from-minibuffer "Search for artist: ")))
@@ -306,11 +341,6 @@
 		  (switch-to-sc-buffer)
 		  (setq *sc-search-results* results)
 		  (draw-sc-artist-search-buffer results))))))
-
-(defun get-current-line-result-number ()
-  (beginning-of-line)
-  (re-search-forward "[0-9]+" nil 'move)
-  (string-to-number (buffer-substring-no-properties (line-beginning-position) (point))))
 
 (defun sc-play-track ()
   (interactive)
@@ -353,3 +383,5 @@
   (unless (<= *sc-track-num* 0)
 	(setq *sc-track-num* (- *sc-track-num* 1))
 	(sc-play-current-track)))
+
+(provide 'soundcloud)
