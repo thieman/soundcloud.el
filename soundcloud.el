@@ -6,21 +6,26 @@
 (require 'easymenu)
 (require 'string-utils)
 
+;;;; globals, helper functions, and emms stuff
+
 (emms-playing-time 1)
+(add-hook 'emms-player-finished-hook 'sc-play-next-track)
 
 (setq sc-client-id "0ef9cd3d5b707698df18f2c22db1714b")
 (setq sc-url "http://soundcloud.com")
 (setq sc-api "http://api.soundcloud.com")
-(setq json-object-type 'hash-table)
-(setq url-request-method "GET")
 
 (setq track-start-line 10)
 
-(setq *sc-current-artist* "")
-(setq *sc-current-tracks* ())
-(setq *sc-track-num* -1)
-(setq *sc-track* nil)
-(setq *sc-playing* nil)
+(defun sc-clear-globals ()
+  (setq *sc-current-artist* "")
+  (setq *sc-current-tracks* ())
+  (setq *sc-search-results* ())
+  (setq *sc-track-num* -1)
+  (setq *sc-track* nil)
+  (setq *sc-playing* nil))
+
+(sc-clear-globals)
 
 (defun inl (text) (insert text) (newline))
 (defun safe-next-line ()
@@ -30,12 +35,16 @@
 		(end (progn (safe-next-line) (line-beginning-position))))
 	(delete-region start end)))
 
-;;; soundcloud-mode
+(setq commands-help
+	  '("Interface" "" "a: go to artist" "s: search for artist" "RET: play selection"
+		"q: stop playback and quit" ""
+		"Playback" "" "p: play/pause current track"))
+
+;;; soundcloud-mode and minor modes
 
 (defvar soundcloud-mode-map
   (let ((map (make-keymap)))
 	(suppress-keymap map t)
-	(define-key map (kbd "RET") 'sc-play-track)
 	(define-key map (kbd "p") 'sc-pause)
 	(define-key map (kbd "f") 'sc-play-next-track)
 	(define-key map (kbd "b") 'sc-play-previous-track)
@@ -44,22 +53,35 @@
 	(define-key map (kbd "q") 'sc-quit)
 	map))
 
+(defvar soundcloud-player-mode-map
+  (let ((map (make-sparse-keymap)))
+	(set-keymap-parent map soundcloud-mode-map)
+	(define-key map (kbd "RET") 'sc-play-track)
+	map))
+
+(defvar soundcloud-artist-search-mode-map
+  (let ((map (make-sparse-keymap)))
+	(set-keymap-parent map soundcloud-mode-map)
+	(define-key map (kbd "RET") 'sc-goto-artist)
+	map))
+
 (setq sc-mode-keywords
-	  '(("[0-9]+\: " . font-lock-variable-name-face)  ;; track numbers
+	  '((".*\n=+\n" . font-lock-constant-face)  ;; headings
+		("[0-9]+\: " . font-lock-variable-name-face)  ;; track numbers
 		("\[-+\]" . font-lock-builtin-face)  ;; progress bar
-		(".*\n=+\n" . font-lock-constant-face)  ;; headings
 		("\\[.*/.*\\]" . font-lock-variable-name-face)))  ;; track timer
 
 (define-derived-mode soundcloud-mode special-mode "SoundCloud"
   (buffer-disable-undo)
   (setq font-lock-defaults '(sc-mode-keywords))
-  (setq mode-name "soundcloud")
   (setq truncate-lines t))
+
+(define-derived-mode soundcloud-player-mode soundcloud-mode "SoundCloud Player")
+(define-derived-mode soundcloud-artist-search-mode soundcloud-mode "SoundCloud Artist Search")
 
 (easy-menu-define soundcloud-mode-menu soundcloud-mode-map
   "SoundCloud menu"
   '("SoundCloud"
-	["Play Selected Track" sc-play-track t]
 	["Play/Pause" sc-pause t]
 	["Play Previous Track" sc-play-previous-track t]
 	["Play Next Track" sc-play-next-track t]
@@ -80,7 +102,8 @@
 
 (defun get-json-from-request (buf)
   (let ((data (get-data-from-request buf)))
-	(json-read-from-string data)))
+	(lexical-let ((json-object-type 'hash-table))
+	  (json-read-from-string data))))
 
 (defun get-stream-url (track-id)
   (deferred:$
@@ -138,21 +161,21 @@
   (funcall 'soundcloud-mode)
   (let ((inhibit-read-only t))
 	(erase-buffer)
+	(draw-now-playing)
+	(goto-char (point-max))
 	(mapc 'inl '("SoundCloud" "==========" ""))
 	(mapc 'inl commands-help)))
 
-(setq commands-help
-	  '("Interface" "" "a: go to artist" "s: search for artist" "RET: play selection"
-		"q: stop playback and quit" ""
-		"Playback" "" "p: play/pause current track"))
-
 (defun draw-sc-artist-buffer (tracks)
   "Empty the current buffer and fill it with track info for a given artist."
+  (funcall 'soundcloud-player-mode)
   (let ((inhibit-read-only t))
 	(erase-buffer)
 	(draw-now-playing)
 	(goto-char (point-max))
-	(let ((title-string (format "Tracks by %s" *sc-current-artist*)))
+	(let ((title-string (format "Tracks by %s (%s)"
+								(gethash "username" (gethash "user" (elt *sc-current-tracks* 0)))
+								*sc-current-artist*)))
 	  (mapc 'inl (list title-string (string-utils-string-repeat "=" (length title-string)) "")))
 	(let ((idx 1))
 	  (mapc 'track-listing *sc-current-tracks*))
@@ -162,10 +185,18 @@
 
 (defun draw-sc-artist-search-buffer (results)
   "Empty the current buffer and fill it with search info for a given artist."
+  (funcall 'soundcloud-artist-search-mode)
   (let ((inhibit-read-only t))
 	(erase-buffer)
 	(draw-now-playing)
 	(goto-char (point-max))
+	(let ((title-string "Search Results"))
+	  (mapc 'inl (list title-string (string-utils-string-repeat "=" (length title-string)) "")))
+	(let ((idx 1))
+	  (mapc 'search-listing results))
+	(goto-char (point-min))
+	(dotimes (i (- track-start-line 1)) (next-line))
+	(beginning-of-line)))
 
 (defun draw-now-playing ()
   (with-current-buffer "*soundcloud*"
@@ -183,7 +214,7 @@
   (if (equal nil *sc-track*)
 	  ""
 	(let* ((progress (/ (float emms-playing-time) (/ (gethash "duration" *sc-track*) 1000)))
-		   (progress-bar-size (- (window-body-width) 2))
+		   (progress-bar-size (- (window-body-width (get-buffer-window "*soundcloud*")) 2))
 		   (completes (min progress-bar-size (floor (* progress-bar-size progress))))
 		   (incompletes (- progress-bar-size completes)))
 	  (format "[%s%s]"
@@ -192,7 +223,13 @@
 
 (defun track-listing (track)
   "Prints info for a track, followed by a newline."
-  (insert (format "%d: %s" idx (gethash "title" track)))
+  (insert (format "%02d: %s" idx (gethash "title" track)))
+  (newline)
+  (setq idx (+ idx 1)))
+
+(defun search-listing (result)
+  "Prints info for a search result, followed by a newline."
+  (insert (format "%02d: %s" idx (gethash "username" result)))
   (newline)
   (setq idx (+ idx 1)))
 
@@ -224,6 +261,12 @@
 	  (lambda (x)
 		(when (and *sc-playing* (equal nil (active-minibuffer-window)))
 		  (draw-now-playing))
+		(update-now-playing)))
+	;; TODO: this will keep updater alive, would be good to figure out
+	;; why it sometimes breaks and fix it
+	(deferred:error it
+	  (lambda (err)
+		(deferred:wait 2000)
 		(update-now-playing)))))
 
 (update-now-playing)
@@ -232,12 +275,17 @@
 
 (defun soundcloud ()
   (interactive)
-  (switch-to-sc-buffer)
-  (init-sc-buffer))
+  (let ((exists (not (equal nil (get-buffer "*soundcloud*")))))
+	(switch-to-sc-buffer)
+	(when (not exists) (init-sc-buffer))))
 
 (defun sc-load-artist ()
   (interactive)
   (lexical-let ((artist-name (read-from-minibuffer "Artist name: ")))
+	(sc-load-artist-by-name artist-name)))
+
+(defun sc-load-artist-by-name (artist-name)
+  (lexical-let ((artist-name artist-name))
 	(deferred:$
 	  (get-artist-tracks-by-name artist-name)
 	  (deferred:nextc it
@@ -256,16 +304,25 @@
 	  (deferred:nextc it
 		(lambda (results)
 		  (switch-to-sc-buffer)
+		  (setq *sc-search-results* results)
 		  (draw-sc-artist-search-buffer results))))))
+
+(defun get-current-line-result-number ()
+  (beginning-of-line)
+  (re-search-forward "[0-9]+" nil 'move)
+  (string-to-number (buffer-substring-no-properties (line-beginning-position) (point))))
 
 (defun sc-play-track ()
   (interactive)
   (sc-stop)
-  (beginning-of-line)
-  (re-search-forward "[0-9]+" nil 'move)
-  (setq *sc-track-num* (- (string-to-number (buffer-substring-no-properties (line-beginning-position) (point))) 1))
+  (setq *sc-track-num* (- (get-current-line-result-number) 1))
   (sc-play-current-track)
   (beginning-of-line))
+
+(defun sc-goto-artist ()
+  (interactive)
+  (let ((result-num (get-current-line-result-number)))
+	(sc-load-artist-by-name (gethash "permalink" (elt *sc-search-results* (- result-num 1))))))
 
 (defun sc-pause ()
   (interactive)
@@ -279,7 +336,7 @@
 
 (defun sc-quit ()
   (interactive)
-  (setq *sc-playing* nil)
+  (sc-clear-globals)
   (emms-stop)
   (kill-buffer "*soundcloud*"))
 
@@ -296,7 +353,3 @@
   (unless (<= *sc-track-num* 0)
 	(setq *sc-track-num* (- *sc-track-num* 1))
 	(sc-play-current-track)))
-
-;;;; emms hooks
-
-(add-hook 'emms-player-finished-hook 'sc-play-next-track)
