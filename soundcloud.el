@@ -357,7 +357,8 @@
 	(if exists
 	  (if (equal (buffer-name) "*soundcloud*")
 		(switch-to-buffer *sc-last-buffer*)
-		(switch-to-sc-buffer))
+		(progn (setq *sc-last-buffer* (current-buffer))
+			   (switch-to-sc-buffer)))
 	  (progn (setq *sc-last-buffer* (current-buffer))
 			 (switch-to-sc-buffer)
 			 (init-sc-buffer)))))
