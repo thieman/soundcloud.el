@@ -7,7 +7,7 @@
 
 ;; Package: soundcloud
 ;; Version: 20131031
-;; Package-Requires: ((emms "20131016") (json "1.4") (deferred "20130930") (string-utils "20131022"))
+;; Package-Requires: ((emms "20131016") (json "1.2") (deferred "20130930") (string-utils "20131022"))
 ;; Keywords: soundcloud music audio
 
 ;; This code is licensed under the WTFPL.
