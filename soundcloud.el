@@ -175,15 +175,20 @@
 	(deferred:nextc it 'get-json-from-request)
 	(deferred:nextc it
 	  (lambda (data)
-		(gethash "location" data)))))
+		(gethash "location" data)))
+	(deferred:error it
+	  (lambda (err)
+		(error "Error while resolving artist permalink, try using artist search instead.")))))
 
 (defun get-artist-tracks-by-name (artist-name)
   (deferred:$
 	(resolve-permalink (format "%s/%s" sc-url artist-name))
 	(deferred:nextc it
 	  (lambda (resolved)
-		(deferred:url-retrieve (replace-regexp-in-string ".json" "/tracks.json" resolved))))
-	(deferred:nextc it 'get-json-from-request)))
+		(when (not (equal nil resolved))
+		  (deferred:$
+			(deferred:url-retrieve (replace-regexp-in-string ".json" "/tracks.json" resolved))
+			(deferred:nextc it 'get-json-from-request)))))))
 
 (defun search-artist-by-query (artist-query)
   (deferred:$
@@ -305,11 +310,13 @@
 	  (get-artist-tracks-by-name artist-name)
 	  (deferred:nextc it
 		(lambda (tracks)
-		  (setq *sc-current-artist* artist-name)
-		  (setq *sc-current-tracks* tracks)
-		  (setq *sc-track-num* -1)
-		  (switch-to-sc-buffer)
-		  (draw-sc-artist-buffer tracks))))))
+		  (if (equal nil tracks)
+			  (error (format "Could not find artist %s, try using search instead." artist-name))
+			(progn (setq *sc-current-artist* artist-name)
+				   (setq *sc-current-tracks* tracks)
+				   (setq *sc-track-num* -1)
+				   (switch-to-sc-buffer)
+				   (draw-sc-artist-buffer tracks))))))))
 
 (defun current-track-detail ()
   "Returns string of detailed info for the current track."
