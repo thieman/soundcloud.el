@@ -43,6 +43,7 @@
 
 (defvar sc-track-start-line 10)
 
+(defvar *sc-last-buffer* nil)
 (defvar *sc-current-artist* "")
 (defvar *sc-current-tracks* ())
 (defvar *sc-search-results* ())
@@ -51,6 +52,7 @@
 (defvar *sc-playing* nil)
 
 (defun sc-clear-globals ()
+  (setq *sc-last-buffer* nil)
   (setq *sc-current-artist* "")
   (setq *sc-current-tracks* ())
   (setq *sc-search-results* ())
@@ -351,8 +353,11 @@
 (defun soundcloud ()
   (interactive)
   (let ((exists (not (equal nil (get-buffer "*soundcloud*")))))
-	(switch-to-sc-buffer)
-	(when (not exists) (init-sc-buffer))))
+	(if exists
+	  (switch-to-buffer *sc-last-buffer*)
+	  (progn (setq *sc-last-buffer* (current-buffer))
+			 (switch-to-sc-buffer)
+			 (init-sc-buffer)))))
 
 (defun sc-load-artist ()
   (interactive)
