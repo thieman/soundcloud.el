@@ -162,7 +162,11 @@
 	(get-stream-url track-id)
 	(deferred:nextc it
 	  (lambda (stream-url)
-		(emms-play-url stream-url)))))
+		(emms-play-url stream-url)))
+	(deferred:error it
+	  (lambda (err)
+		(cond
+		 ((string-match "^Don't know how to play track" err) (error "emms could not play a stream, make sure mplayer is installed and emms is configured.")))))))
 
 (defun resolve-permalink (permalink)
   (deferred:$
