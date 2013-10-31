@@ -34,8 +34,6 @@
 (require 'easymenu)
 (require 'string-utils)
 
-;;;; globals, helper functions, and emms stuff
-
 (emms-playing-time 1)
 (add-hook 'emms-player-finished-hook 'sc-play-next-track)
 
@@ -70,6 +68,9 @@
 		(end (progn (safe-next-line) (line-beginning-position))))
 	(delete-region start end)))
 
+(defun switch-mode (mode-sym)
+  (funcall mode-sym))
+
 (setq commands-help
 	  '("Interface" "" "a: go to artist" "s: search for artist" "RET: play selection"
 		"q: stop playback and quit" ""
@@ -86,18 +87,25 @@
 	(define-key map (kbd "s") 'sc-search-artist)
 	(define-key map (kbd "a") 'sc-load-artist)
 	(define-key map (kbd "q") 'sc-quit)
+	(define-key map (kbd "RET") 'dispatch-ret)
 	map))
+
+;; The normal method of doing this through defining specific RET functions
+;; within the derived modes worked in Cocoa Emacs but had weird behavior
+;; in XEmacs and Emacs in a console. Hence, dispatch-ret
+(defun dispatch-ret ()
+  (interactive)
+  (cond ((equal major-mode 'soundcloud-player-mode) (sc-play-track))
+		((equal major-mode 'soundcloud-artist-search-mode) (sc-goto-artist))))
 
 (defvar soundcloud-player-mode-map
   (let ((map (make-sparse-keymap)))
 	(set-keymap-parent map soundcloud-mode-map)
-	(define-key map (kbd "RET") 'sc-play-track)
 	map))
 
 (defvar soundcloud-artist-search-mode-map
   (let ((map (make-sparse-keymap)))
 	(set-keymap-parent map soundcloud-mode-map)
-	(define-key map (kbd "RET") 'sc-goto-artist)
 	map))
 
 (setq sc-mode-keywords
@@ -193,7 +201,7 @@
 
 (defun init-sc-buffer ()
   "Turns the current buffer into a fresh SoundCloud buffer."
-  (funcall 'soundcloud-mode)
+  (switch-mode 'soundcloud-mode)
   (let ((inhibit-read-only t))
 	(erase-buffer)
 	(draw-now-playing)
@@ -203,7 +211,7 @@
 
 (defun draw-sc-artist-buffer (tracks)
   "Empty the current buffer and fill it with track info for a given artist."
-  (funcall 'soundcloud-player-mode)
+  (switch-mode 'soundcloud-player-mode)
   (let ((inhibit-read-only t))
 	(erase-buffer)
 	(draw-now-playing)
@@ -220,7 +228,7 @@
 
 (defun draw-sc-artist-search-buffer (results)
   "Empty the current buffer and fill it with search info for a given artist."
-  (funcall 'soundcloud-artist-search-mode)
+  (switch-mode 'soundcloud-artist-search-mode)
   (let ((inhibit-read-only t))
 	(erase-buffer)
 	(draw-now-playing)
@@ -376,17 +384,20 @@
 
 (defun sc-play-next-track ()
   (interactive)
-  (if (or (= -1 *sc-track-num*) (= (length *sc-current-tracks*) (+ 1 *sc-track-num*)))
-	(setq *sc-track* nil)
-	(progn
-	  (setq *sc-track-num* (+ 1 *sc-track-num*))
-	  (sc-play-current-track))))
+  (when (equal t *sc-playing*)
+	(if (or (= -1 *sc-track-num*) (= (length *sc-current-tracks*) (+ 1 *sc-track-num*)))
+		(progn (setq *sc-track* nil)
+			   (setq *sc-playing* nil))
+	  (progn
+		(setq *sc-track-num* (+ 1 *sc-track-num*))
+		(sc-play-current-track)))))
 
 (defun sc-play-previous-track ()
   (interactive)
-  (unless (<= *sc-track-num* 0)
-	(setq *sc-track-num* (- *sc-track-num* 1))
-	(sc-play-current-track)))
+  (when (equal t *sc-playing*)
+	(unless (<= *sc-track-num* 0)
+	  (setq *sc-track-num* (- *sc-track-num* 1))
+	  (sc-play-current-track))))
 
 (provide 'soundcloud)
 
