@@ -266,15 +266,19 @@
 
 (defun track-listing (track)
   "Prints info for a track, followed by a newline."
-  (insert (format "%02d: %s" *sc-idx* (gethash "title" track)))
-  (newline)
-  (setq *sc-idx* (+ *sc-idx* 1)))
+  (let* ((magnitude (length (number-to-string (length *sc-current-tracks*))))
+		 (format-str (concat "%0" (number-to-string magnitude) "d: %s")))
+	(insert (format format-str *sc-idx* (gethash "title" track)))
+	(newline)
+	(setq *sc-idx* (+ *sc-idx* 1))))
 
 (defun search-listing (result)
   "Prints info for a search result, followed by a newline."
-  (insert (format "%02d: %s" *sc-idx* (gethash "username" result)))
+  (let* ((magnitude (length (number-to-string (length *sc-search-results*))))
+		 (format-str (concat "%0" (number-to-string magnitude) "d: %s")))
+  (insert (format format-str *sc-idx* (gethash "username" result)))
   (newline)
-  (setq *sc-idx* (+ *sc-idx* 1)))
+  (setq *sc-idx* (+ *sc-idx* 1))))
 
 ;;;; private player commands
 
