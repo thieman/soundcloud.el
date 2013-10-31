@@ -354,7 +354,9 @@
   (interactive)
   (let ((exists (not (equal nil (get-buffer "*soundcloud*")))))
 	(if exists
-	  (switch-to-buffer *sc-last-buffer*)
+	  (if (equal (buffer-name) "*soundcloud*")
+		(switch-to-buffer *sc-last-buffer*)
+		(switch-to-sc-buffer))
 	  (progn (setq *sc-last-buffer* (current-buffer))
 			 (switch-to-sc-buffer)
 			 (init-sc-buffer)))))
