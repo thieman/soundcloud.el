@@ -73,7 +73,7 @@
 (defun switch-mode (mode-sym)
   (funcall mode-sym))
 
-(setq commands-help
+(setq sc-commands-help
 	  '("Interface" "" "a: go to artist" "s: search for artist" "RET: play selection"
 		"q: stop playback and quit" ""
 		"Playback" "" "p: play/pause current track"))
@@ -89,13 +89,13 @@
 	(define-key map (kbd "s") 'sc-search-artist)
 	(define-key map (kbd "a") 'sc-load-artist)
 	(define-key map (kbd "q") 'sc-quit)
-	(define-key map (kbd "RET") 'dispatch-ret)
+	(define-key map (kbd "RET") 'sc-dispatch-ret)
 	map))
 
 ;; The normal method of doing this through defining specific RET functions
 ;; within the derived modes worked in Cocoa Emacs but had weird behavior
-;; in XEmacs and Emacs in a console. Hence, dispatch-ret
-(defun dispatch-ret ()
+;; in XEmacs and Emacs in a console. Hence, sc-dispatch-ret.
+(defun sc-dispatch-ret ()
   (interactive)
   (cond ((equal major-mode 'soundcloud-player-mode) (sc-play-track))
 		((equal major-mode 'soundcloud-artist-search-mode) (sc-goto-artist))))
@@ -218,7 +218,7 @@
 	(draw-now-playing)
 	(goto-char (point-max))
 	(mapc 'inl '("SoundCloud" "==========" ""))
-	(mapc 'inl commands-help)))
+	(mapc 'inl sc-commands-help)))
 
 (defun draw-sc-artist-buffer (tracks)
   "Empty the current buffer and fill it with track info for a given artist."
@@ -255,14 +255,15 @@
 (defun draw-now-playing ()
   (with-current-buffer "*soundcloud*"
 	(let ((inhibit-read-only t)
-		  (current-line (line-number-at-pos)))
+		  (current-line (line-number-at-pos))
+		  (current-col (current-column)))
 	  (goto-char (point-min))
 	  (dotimes (i 6) (delete-line))
 	  (goto-char (point-min))
 	  (mapc 'inl (list "Now Playing" "===========" "" (current-track-detail) (song-progress-bar) ""))
 	  (goto-char (point-min))
 	  (dotimes (i (- current-line 1)) (next-line))
-	  (beginning-of-line))))
+	  (dotimes (i current-col) (forward-char)))))
 
 (defun song-progress-bar ()
   (if (equal nil *sc-track*)
