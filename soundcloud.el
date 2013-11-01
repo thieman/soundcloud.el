@@ -254,16 +254,12 @@
 
 (defun draw-now-playing ()
   (with-current-buffer "*soundcloud*"
-	(let ((inhibit-read-only t)
-		  (current-line (line-number-at-pos))
-		  (current-col (current-column)))
-	  (goto-char (point-min))
-	  (dotimes (i 6) (delete-line))
-	  (goto-char (point-min))
-	  (mapc 'inl (list "Now Playing" "===========" "" (current-track-detail) (song-progress-bar) ""))
-	  (goto-char (point-min))
-	  (dotimes (i (- current-line 1)) (next-line))
-	  (dotimes (i current-col) (forward-char)))))
+	(let ((inhibit-read-only t))
+	  (save-excursion
+		(goto-char (point-min))
+		(dotimes (i 6) (delete-line))
+		(goto-char (point-min))
+		(mapc 'inl (list "Now Playing" "===========" "" (current-track-detail) (song-progress-bar) ""))))))
 
 (defun song-progress-bar ()
   (if (equal nil *sc-track*)
