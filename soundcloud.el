@@ -75,8 +75,8 @@
 
 (defun keys (hashtable)
   (let (allkeys)
-	(maphash (lambda (kk vv) (setq allkeys (cons kk allkeys))) hashtable)
-	allkeys))
+    (maphash (lambda (kk vv) (setq allkeys (cons kk allkeys))) hashtable)
+    allkeys))
 
 ;;; soundcloud-mode and minor modes
 
@@ -218,9 +218,9 @@
     (draw-now-playing)
     (goto-char (point-max))
     (mapc 'inl '("SoundCloud" "==========" ""))
-	(mapc 'inl '("Interface" "" "a: go to artist" "s: search for artist" "RET: play selection"
-				 "q: stop playback and quit" ""
-				 "Playback" "" "p: play/pause current track"))))
+    (mapc 'inl '("Interface" "" "a: go to artist" "s: search for artist" "RET: play selection"
+                 "q: stop playback and quit" ""
+                 "Playback" "" "p: play/pause current track"))))
 
 (defun draw-sc-artist-buffer (tracks)
   "Empty the current buffer and fill it with track info for a given artist."
@@ -299,8 +299,8 @@
 
 (defun random-artist-tracks ()
   (let* ((artists (keys *sc-artist-tracks*))
-		 (artist (elt artists (random (length artists)))))
-	(gethash artist *sc-artist-tracks*)))
+         (artist (elt artists (random (length artists)))))
+    (gethash artist *sc-artist-tracks*)))
 
 (defun get-current-line-result-number ()
   (beginning-of-line)
@@ -322,8 +322,8 @@
           (if (equal nil tracks)
               (error (format "Could not find artist %s, try using search instead." artist-name))
             (progn (setq *sc-current-artist* artist-name)
-				   (remhash artist-name *sc-artist-tracks*)
-				   (puthash artist-name tracks *sc-artist-tracks*)
+                   (remhash artist-name *sc-artist-tracks*)
+                   (puthash artist-name tracks *sc-artist-tracks*)
                    (setq *sc-track-num* -1)
                    (switch-to-sc-buffer)
                    (draw-sc-artist-buffer tracks))))))))
