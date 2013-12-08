@@ -14,7 +14,7 @@ SoundCloud client in yo' Emacs
 
 #### emacs
 
-    M-x package-install-from-file <RET> soundcloud.el
+    M-x package-install-file <RET> soundcloud.el
 
 ## Getting Started
 
