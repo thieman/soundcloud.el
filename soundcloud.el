@@ -6,7 +6,7 @@
 ;; Author: Travis Thieman <travis.thieman@gmail.com>
 
 ;; Package: soundcloud
-;; Version: 20131031
+;; Version: 20131209
 ;; Package-Requires: ((emms "20131016") (json "1.2") (deferred "20130930") (string-utils "20131022"))
 ;; Keywords: soundcloud music audio
 
@@ -50,6 +50,7 @@
 (defvar *sc-track-num* -1)
 (defvar *sc-track* nil)
 (defvar *sc-playing* nil)
+(defvar *sc-idx* -1)
 
 (defun sc-clear-globals ()
   (setq *sc-last-buffer* nil)
@@ -58,13 +59,14 @@
   (setq *sc-search-results* ())
   (setq *sc-track-num* -1)
   (setq *sc-track* nil)
-  (setq *sc-playing* nil))
+  (setq *sc-playing* nil)
+  (setq *sc-idx* -1))
 
 (sc-clear-globals)
 
 (defun inl (text) (insert text) (newline))
 (defun safe-next-line ()
-  (if (= (line-end-position) (point-max)) nil (next-line)))
+  (if (= (line-end-position) (point-max)) nil (forward-line 1)))
 (defun delete-line ()
   (let ((start (line-beginning-position))
         (end (progn (safe-next-line) (line-beginning-position))))
@@ -214,43 +216,40 @@
   "Turns the current buffer into a fresh SoundCloud buffer."
   (switch-mode 'soundcloud-mode)
   (let ((inhibit-read-only t))
-    (erase-buffer)
-    (draw-now-playing)
-    (goto-char (point-max))
-    (mapc 'inl '("SoundCloud" "==========" ""))
-    (mapc 'inl sc-commands-help)))
+	(save-excursion
+	  (erase-buffer)
+	  (draw-now-playing)
+	  (goto-char (point-max))
+	  (mapc 'inl '("SoundCloud" "==========" ""))
+	  (mapc 'inl sc-commands-help))))
 
 (defun draw-sc-artist-buffer (tracks)
   "Empty the current buffer and fill it with track info for a given artist."
   (switch-mode 'soundcloud-player-mode)
   (let ((inhibit-read-only t))
-    (erase-buffer)
-    (draw-now-playing)
-    (goto-char (point-max))
-    (let ((title-string (format "Tracks by %s (%s)"
-                                (gethash "username" (gethash "user" (elt *sc-current-tracks* 0)))
-                                *sc-current-artist*)))
-      (mapc 'inl (list title-string (string-utils-string-repeat "=" (length title-string)) "")))
-    (let ((*sc-idx* 1))
-      (mapc 'track-listing *sc-current-tracks*))
-    (goto-char (point-min))
-    (dotimes (i (- sc-track-start-line 1)) (next-line))
-    (beginning-of-line)))
+	(save-excursion
+	  (erase-buffer)
+	  (draw-now-playing)
+	  (goto-char (point-max))
+	  (let ((title-string (format "Tracks by %s (%s)"
+								  (gethash "username" (gethash "user" (elt *sc-current-tracks* 0)))
+								  *sc-current-artist*)))
+		(mapc 'inl (list title-string (string-utils-string-repeat "=" (length title-string)) "")))
+	  (let ((*sc-idx* 1))
+		(mapc 'track-listing *sc-current-tracks*)))))
 
 (defun draw-sc-artist-search-buffer (results)
   "Empty the current buffer and fill it with search info for a given artist."
   (switch-mode 'soundcloud-artist-search-mode)
   (let ((inhibit-read-only t))
-    (erase-buffer)
-    (draw-now-playing)
-    (goto-char (point-max))
-    (let ((title-string "Search Results"))
-      (mapc 'inl (list title-string (string-utils-string-repeat "=" (length title-string)) "")))
-    (let ((*sc-idx* 1))
-      (mapc 'search-listing results))
-    (goto-char (point-min))
-    (dotimes (i (- sc-track-start-line 1)) (next-line))
-    (beginning-of-line)))
+	(save-excursion
+	  (erase-buffer)
+	  (draw-now-playing)
+	  (goto-char (point-max))
+	  (let ((title-string "Search Results"))
+		(mapc 'inl (list title-string (string-utils-string-repeat "=" (length title-string)) "")))
+	  (let ((*sc-idx* 1))
+		(mapc 'search-listing results)))))
 
 (defun draw-now-playing ()
   (with-current-buffer "*soundcloud*"
