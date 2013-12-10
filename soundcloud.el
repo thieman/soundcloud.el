@@ -26,7 +26,6 @@
 
 ;;  0. You just DO WHAT THE FUCK YOU WANT TO.
 
-
 ;;; Commentary:
 
 ;; This package provides a minimal interface to the SoundCloud API, allowing
