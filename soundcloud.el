@@ -7,7 +7,7 @@
 
 ;; Package: soundcloud
 ;; Version: 20131209
-;; Package-Requires: ((emms "20131016") (json "1.2") (deferred "20130930") (string-utils "20131022"))
+;; Package-Requires: ((emms "20131016") (json "1.2") (deferred "0.3.1") (string-utils "0.3.2"))
 ;; Keywords: soundcloud music audio
 
 ;; This code is licensed under the WTFPL.
@@ -112,7 +112,7 @@
     (set-keymap-parent map soundcloud-mode-map)
     map))
 
-(setq sc-mode-keywords
+(defvar sc-mode-keywords
       '((".*\n=+\n" . font-lock-constant-face)  ;; headings
         ("[0-9]+\: " . font-lock-variable-name-face)  ;; track numbers
         ("\[-+\]" . font-lock-builtin-face)  ;; progress bar
