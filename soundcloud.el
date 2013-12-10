@@ -6,7 +6,7 @@
 ;; Author: Travis Thieman <travis.thieman@gmail.com>
 
 ;; Package: soundcloud
-;; Version: 20131209
+;; Version: 20131210
 ;; Package-Requires: ((emms "20131016") (json "1.2") (deferred "0.3.1") (string-utils "0.3.2"))
 ;; Keywords: soundcloud music audio
 
