@@ -26,6 +26,16 @@
 
 ;;  0. You just DO WHAT THE FUCK YOU WANT TO.
 
+
+;;; Commentary:
+
+;; This package provides a minimal interface to the SoundCloud API, allowing
+;; the user to find tracks by a specified artist or an artist found through
+;; search.  Tracks are played using EMMS, which must be configured to play
+;; streams from URLs.  mplayer is recommended for this.
+
+;;; Code:
+
 (require 'emms)
 (require 'emms-playing-time)
 (require 'json)
@@ -53,6 +63,7 @@
 (defvar *soundcloud-idx* -1)
 
 (defun soundcloud-clear-globals ()
+  "Reset all SoundCloud globals to their initial states."
   (setq *soundcloud-last-buffer* nil)
   (setq *soundcloud-current-artist* "")
   (clrhash *soundcloud-artist-tracks*)
@@ -64,18 +75,26 @@
 
 (soundcloud-clear-globals)
 
-(defun soundcloud-inl (text) (insert text) (newline))
+(defun soundcloud-inl (text)
+  "Insert TEXT, followed by a newline at the current point."
+  (insert text) (newline))
+
 (defun soundcloud-safe-next-line ()
+  "Move to the next line if possible, otherwise do nothing."
   (if (= (line-end-position) (point-max)) nil (forward-line 1)))
+
 (defun soundcloud-delete-line ()
+  "Delete the text in the current line without deleting the newline at the end."
   (let ((start (line-beginning-position))
         (end (progn (soundcloud-safe-next-line) (line-beginning-position))))
     (delete-region start end)))
 
 (defun soundcloud-switch-mode (mode-sym)
+  "Switch to mode MODE-SYM in the current buffer.  Attempts to do this more traditionally led to weird errors in XEmacs."
   (funcall mode-sym))
 
 (defun soundcloud-keys (hashtable)
+  "Return list of all keys from HASHTABLE."
   (let (allkeys)
     (maphash (lambda (kk vv) (setq allkeys (cons kk allkeys))) hashtable)
     allkeys))
@@ -98,6 +117,7 @@
 ;; within the derived modes worked in Cocoa Emacs but had weird behavior
 ;; in XEmacs and Emacs in a console. Hence, soundcloud-dispatch-ret.
 (defun soundcloud-dispatch-ret ()
+  "Dispatch the return keycode to a function based on the current buffer mode."
   (interactive)
   (cond ((equal major-mode 'soundcloud-player-mode) (soundcloud-play-track))
         ((equal major-mode 'soundcloud-artist-search-mode) (soundcloud-goto-artist))))
@@ -140,6 +160,7 @@
 ;;;; deferred functions for talking to SoundCloud
 
 (defun soundcloud-get-data-from-request (buf)
+  "Return GET request data from BUF.  Kill BUF."
   (with-current-buffer buf
     (goto-char (point-min))
     (re-search-forward "^$" nil 'move)
@@ -148,11 +169,13 @@
   data)
 
 (defun soundcloud-get-json-from-request (buf)
+  "Return JSON hash table from GET data within BUF.  Kill BUF."
   (let ((data (soundcloud-get-data-from-request buf)))
     (let ((json-object-type 'hash-table))
       (json-read-from-string data))))
 
 (defun soundcloud-get-stream-url (track-id)
+  "Get SoundCloud API stream URL from a TRACK-ID."
   (deferred:$
     (deferred:url-retrieve (format "%s/tracks/%d.json?client_id=%s"
                                    soundcloud-api track-id soundcloud-client-id))
@@ -162,6 +185,7 @@
         (format "%s?client_id=%s" (gethash "stream_url" json-data) soundcloud-client-id)))))
 
 (defun soundcloud-play-track-id (track-id)
+  "Start playing the track with the given TRACK-ID."
   (deferred:$
     (soundcloud-get-stream-url track-id)
     (deferred:nextc it
@@ -170,9 +194,10 @@
     (deferred:error it
       (lambda (err)
         (cond
-         ((string-match "^Don't know how to play track" err) (error "emms could not play a stream, make sure mplayer is installed and emms is configured.")))))))
+         ((string-match "^Don't know how to play track" err) (error "EMMS could not play a stream, make sure mplayer is installed and emms is configured")))))))
 
 (defun soundcloud-resolve-permalink (permalink)
+  "Return full artist endpoint based on the given PERMALINK."
   (deferred:$
     (deferred:url-retrieve (format "%s/resolve.json?url=%s&client_id=%s"
                                    soundcloud-api permalink soundcloud-client-id))
@@ -182,9 +207,10 @@
         (gethash "location" data)))
     (deferred:error it
       (lambda (err)
-        (error "Error while resolving artist permalink, try using artist search instead.")))))
+        (error "Error while resolving artist permalink, try using artist search instead")))))
 
 (defun soundcloud-get-artist-tracks-by-name (artist-name)
+  "Return list of all tracks of ARTIST-NAME."
   (deferred:$
     (soundcloud-resolve-permalink (format "%s/%s" soundcloud-url artist-name))
     (deferred:nextc it
@@ -195,6 +221,7 @@
             (deferred:nextc it 'soundcloud-get-json-from-request)))))))
 
 (defun soundcloud-search-artist-by-query (artist-query)
+  "Return list of all search results for ARTIST-QUERY."
   (deferred:$
     (deferred:url-retrieve (format "%s/users.json?q=%s&client_id=%s"
                                    soundcloud-api artist-query soundcloud-client-id))
@@ -203,17 +230,19 @@
 ;;;; the *soundcloud* buffer
 
 (defun soundcloud-switch-to-buffer ()
+  "Create *soundcloud* buffer if it does not exist.  Go to that buffer if not currently on it, otherwise go back to the previous buffer."
   (let ((buf (or (get-buffer "*soundcloud*")
                  (generate-new-buffer "*soundcloud*"))))
     (switch-to-buffer buf)))
 
 (defun soundcloud-buffer-set ()
+  "Designate the current buffer as the *soundcloud* buffer."
   (let ((buf (or (get-buffer "*soundcloud*")
                  (generate-new-buffer "*soundcloud*"))))
     (set-buffer buf)))
 
 (defun soundcloud-init-buffer ()
-  "Turns the current buffer into a fresh SoundCloud buffer."
+  "Turn the current buffer into a fresh SoundCloud buffer."
   (soundcloud-switch-mode 'soundcloud-mode)
   (let ((inhibit-read-only t))
 	(save-excursion
@@ -226,7 +255,7 @@
                  "Playback" "" "p: play/pause current track")))))
 
 (defun soundcloud-draw-artist-buffer (tracks)
-  "Empty the current buffer and fill it with track info for a given artist."
+  "Empty the current buffer and fill it with track info from TRACKS."
   (soundcloud-switch-mode 'soundcloud-player-mode)
   (let ((inhibit-read-only t))
 	(save-excursion
@@ -241,7 +270,7 @@
       (mapc 'soundcloud-track-listing (soundcloud-current-artist-tracks))))))
 
 (defun soundcloud-draw-artist-search-buffer (results)
-  "Empty the current buffer and fill it with search info for a given artist."
+  "Empty the current buffer and fill it with search info from RESULTS."
   (soundcloud-switch-mode 'soundcloud-artist-search-mode)
   (let ((inhibit-read-only t))
 	(save-excursion
@@ -254,6 +283,7 @@
 		(mapc 'soundcloud-search-listing results)))))
 
 (defun soundcloud-draw-now-playing ()
+  "Draw the Now Playing view at the top of the *soundcloud* buffer."
   (with-current-buffer "*soundcloud*"
     (let ((inhibit-read-only t))
       (save-excursion
@@ -263,6 +293,7 @@
         (mapc 'soundcloud-inl(list "Now Playing" "===========" "" (soundcloud-current-track-detail) (soundcloud-song-progress-bar) ""))))))
 
 (defun soundcloud-song-progress-bar ()
+  "Return string representing the current song progress bar."
   (if (equal nil *soundcloud-track*)
       ""
     (let* ((progress (/ (float emms-playing-time) (/ (gethash "duration" *soundcloud-track*) 1000)))
@@ -274,18 +305,19 @@
               (string-utils-string-repeat " " incompletes)))))
 
 (defun soundcloud-track-number-format-string (coll)
+  "Return formatted track number string for each element in COLL, e.g. 1: Title."
   (let ((magnitude (length (number-to-string (length coll)))))
     (concat "%0" (number-to-string magnitude) "d: %s")))
 
 (defun soundcloud-track-listing (track)
-  "Prints info for a track, followed by a newline."
+  "Prints info for TRACK, followed by a newline."
   (insert (format (soundcloud-track-number-format-string (soundcloud-current-artist-tracks))
                   *soundcloud-idx* (gethash "title" track)))
   (newline)
   (setq *soundcloud-idx* (+ *soundcloud-idx* 1)))
 
 (defun soundcloud-search-listing (result)
-  "Prints info for a search result, followed by a newline."
+  "Prints info for a search RESULT, followed by a newline."
   (insert (format (soundcloud-track-number-format-string *soundcloud-last-api-result*)
                   *soundcloud-idx* (gethash "username" result)))
   (newline)
@@ -294,25 +326,30 @@
 ;;;; private player commands
 
 (defun soundcloud-current-artist-tracks ()
+  "Return tracks hashmap of the current artist."
   (gethash *soundcloud-current-artist* *soundcloud-artist-tracks*))
 
 (defun soundcloud-random-artist-tracks ()
+  "Return tracks hashmap of a randomly selected artist from the available artists."
   (let* ((artists (soundcloud-keys *soundcloud-artist-tracks*))
          (artist (elt artists (random (length artists)))))
     (gethash artist *soundcloud-artist-tracks*)))
 
 (defun soundcloud-get-current-line-result-number ()
+  "Get listing number at point."
   (beginning-of-line)
   (re-search-forward "[0-9]+" nil 'move)
   (string-to-number (buffer-substring-no-properties (line-beginning-position) (point))))
 
 (defun soundcloud-play-current-track ()
+  "Play the track at point."
   (setq *soundcloud-playing* t)
   (setq *soundcloud-track* (elt (soundcloud-current-artist-tracks) *soundcloud-track-num*))
   (soundcloud-draw-now-playing)
   (soundcloud-play-track-id (gethash "id" *soundcloud-track*)))
 
 (defun soundcloud-load-artist-by-name (artist-name)
+  "Load the artist tracks for ARTIST-NAME at point."
   (lexical-let ((artist-name artist-name))
     (deferred:$
       (soundcloud-get-artist-tracks-by-name artist-name)
@@ -328,7 +365,7 @@
                    (soundcloud-draw-artist-buffer tracks))))))))
 
 (defun soundcloud-current-track-detail ()
-  "Returns string of detailed info for the current track."
+  "Return string of detailed info for the current track."
   (if (equal nil *soundcloud-track*)
       "No Track Selected"
       (format "%s : %s      [ %s / %s ]"
@@ -338,6 +375,7 @@
               (format-seconds "%.2m:%.2s" (/ (gethash "duration" *soundcloud-track*) 1000)))))
 
 (defun soundcloud-update-now-playing ()
+  "Continuously update the Now Playing view at the top of the buffer."
   (deferred:$
     (deferred:wait 500)
     (deferred:nextc it
@@ -358,6 +396,7 @@
 
 ;;;###autoload
 (defun soundcloud ()
+  "Create a new SoundCloud buffer, or switch to it if it already exists.  If already in the SC buffer, switch to the previous buffer."
   (interactive)
   (let ((exists (not (equal nil (get-buffer "*soundcloud*")))))
     (if exists
@@ -370,11 +409,13 @@
              (soundcloud-init-buffer)))))
 
 (defun soundcloud-load-artist ()
+  "Load an artist's tracks by the artist's exact permalink name."
   (interactive)
   (lexical-let ((artist-name (read-from-minibuffer "Artist name: ")))
     (soundcloud-load-artist-by-name artist-name)))
 
 (defun soundcloud-search-artist ()
+  "Load search results for an artist name query."
   (interactive)
   (lexical-let ((artist-query (read-from-minibuffer "Search for artist: ")))
     (deferred:$
@@ -386,6 +427,7 @@
           (soundcloud-draw-artist-search-buffer results))))))
 
 (defun soundcloud-play-track ()
+  "Play the track at the current point in a track listing."
   (interactive)
   (soundcloud-stop)
   (setq *soundcloud-track-num* (- (soundcloud-get-current-line-result-number) 1))
@@ -393,28 +435,33 @@
   (beginning-of-line))
 
 (defun soundcloud-goto-artist ()
+  "Load tracks for the artist at the current point in a search listing."
   (interactive)
   (let ((result-num (soundcloud-get-current-line-result-number)))
     (soundcloud-load-artist-by-name (gethash "permalink" (elt *soundcloud-last-api-result* (- result-num 1))))
     (beginning-of-line)))
 
 (defun soundcloud-pause ()
+  "Pause the currently playing track."
   (interactive)
   (setq *soundcloud-playing* (not *soundcloud-playing*))
   (emms-pause))
 
 (defun soundcloud-stop ()
+  "Stop the currently playing track."
   (interactive)
   (setq *soundcloud-playing* nil)
   (emms-stop))
 
 (defun soundcloud-quit ()
+  "Quit out of SoundCloud, clearing globals and killing the SoundCloud buffer."
   (interactive)
   (soundcloud-clear-globals)
   (emms-stop)
   (kill-buffer "*soundcloud*"))
 
 (defun soundcloud-play-next-track ()
+  "Play the next track in the currently playing artist's track listing."
   (interactive)
   (when (equal t *soundcloud-playing*)
     (if (or (= -1 *soundcloud-track-num*) (= (length (soundcloud-current-artist-tracks)) (+ 1 *soundcloud-track-num*)))
@@ -425,6 +472,7 @@
         (soundcloud-play-current-track)))))
 
 (defun soundcloud-play-previous-track ()
+  "Play the previous track in the currently playing artist's track listing."
   (interactive)
   (when (equal t *soundcloud-playing*)
     (unless (<= *soundcloud-track-num* 0)
