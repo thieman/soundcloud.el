@@ -1,31 +1,33 @@
 soundcloud.el
 =============
 
-<img src="http://i.imgur.com/ZyTcbzD.png" height="600">
+SoundCloud client in yo' Emacs. Available now on [MELPA](https://github.com/milkypostman/melpa) as `soundcloud`.
 
-SoundCloud client in yo' Emacs
+<img src="http://i.imgur.com/ZyTcbzD.png" height="600">
 
 ## Installation
 
 #### mplayer
 
     brew install mplayer  # for os x
-	sudo apt-get install mplayer  # for ubuntu
+    sudo apt-get install mplayer  # for ubuntu
 
 #### emacs
 
-    M-x package-install-file <RET> soundcloud.el
+`soundcloud` is available on [MELPA](https://github.com/milkypostman/melpa).
+
+    M-x package-install <RET> soundcloud <RET>
 
 ## Getting Started
 
     M-x soundcloud
 
     a: go to an artist using their permalink name
-	s: search for an artist by name
-	p: play/pause
-	f: next song
-	b: previous song
-	q: quit
+    s: search for an artist by name
+    p: play/pause
+    f: next song
+    b: previous song
+    q: quit
 
 ## Features
 
