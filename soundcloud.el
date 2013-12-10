@@ -234,11 +234,11 @@
     (soundcloud-draw-now-playing)
     (goto-char (point-max))
     (let ((title-string (format "Tracks by %s (%s)"
-                                (gethash "username" (gethash "user" (elt (current-artist-tracks) 0)))
+                                (gethash "username" (gethash "user" (elt (soundcloud-current-artist-tracks) 0)))
                                 *soundcloud-current-artist*)))
       (mapc 'soundcloud-inl(list title-string (string-utils-string-repeat "=" (length title-string)) "")))
     (let ((*soundcloud-idx* 1))
-      (mapc 'track-listing (current-artist-tracks))))))
+      (mapc 'soundcloud-track-listing (soundcloud-current-artist-tracks))))))
 
 (defun soundcloud-draw-artist-search-buffer (results)
   "Empty the current buffer and fill it with search info for a given artist."
@@ -251,7 +251,7 @@
 	  (let ((title-string "Search Results"))
 		(mapc 'soundcloud-inl(list title-string (string-utils-string-repeat "=" (length title-string)) "")))
 	  (let ((*soundcloud-idx* 1))
-		(mapc 'search-listing results)))))
+		(mapc 'soundcloud-search-listing results)))))
 
 (defun soundcloud-draw-now-playing ()
   (with-current-buffer "*soundcloud*"
@@ -260,9 +260,9 @@
         (goto-char (point-min))
         (dotimes (i 6) (soundcloud-delete-line))
         (goto-char (point-min))
-        (mapc 'soundcloud-inl(list "Now Playing" "===========" "" (soundcloud-current-track-detail) (song-progress-bar) ""))))))
+        (mapc 'soundcloud-inl(list "Now Playing" "===========" "" (soundcloud-current-track-detail) (soundcloud-song-progress-bar) ""))))))
 
-(defun song-progress-bar ()
+(defun soundcloud-song-progress-bar ()
   (if (equal nil *soundcloud-track*)
       ""
     (let* ((progress (/ (float emms-playing-time) (/ (gethash "duration" *soundcloud-track*) 1000)))
@@ -273,42 +273,42 @@
               (string-utils-string-repeat "-" completes)
               (string-utils-string-repeat " " incompletes)))))
 
-(defun track-number-format-string (coll)
+(defun soundcloud-track-number-format-string (coll)
   (let ((magnitude (length (number-to-string (length coll)))))
     (concat "%0" (number-to-string magnitude) "d: %s")))
 
-(defun track-listing (track)
+(defun soundcloud-track-listing (track)
   "Prints info for a track, followed by a newline."
-  (insert (format (track-number-format-string (current-artist-tracks))
+  (insert (format (soundcloud-track-number-format-string (soundcloud-current-artist-tracks))
                   *soundcloud-idx* (gethash "title" track)))
   (newline)
   (setq *soundcloud-idx* (+ *soundcloud-idx* 1)))
 
-(defun search-listing (result)
+(defun soundcloud-search-listing (result)
   "Prints info for a search result, followed by a newline."
-  (insert (format (track-number-format-string *soundcloud-last-api-result*)
+  (insert (format (soundcloud-track-number-format-string *soundcloud-last-api-result*)
                   *soundcloud-idx* (gethash "username" result)))
   (newline)
   (setq *soundcloud-idx* (+ *soundcloud-idx* 1)))
 
 ;;;; private player commands
 
-(defun current-artist-tracks ()
+(defun soundcloud-current-artist-tracks ()
   (gethash *soundcloud-current-artist* *soundcloud-artist-tracks*))
 
-(defun random-artist-tracks ()
+(defun soundcloud-random-artist-tracks ()
   (let* ((artists (soundcloud-keys *soundcloud-artist-tracks*))
          (artist (elt artists (random (length artists)))))
     (gethash artist *soundcloud-artist-tracks*)))
 
-(defun get-current-line-result-number ()
+(defun soundcloud-get-current-line-result-number ()
   (beginning-of-line)
   (re-search-forward "[0-9]+" nil 'move)
   (string-to-number (buffer-substring-no-properties (line-beginning-position) (point))))
 
 (defun soundcloud-play-current-track ()
   (setq *soundcloud-playing* t)
-  (setq *soundcloud-track* (elt (current-artist-tracks) *soundcloud-track-num*))
+  (setq *soundcloud-track* (elt (soundcloud-current-artist-tracks) *soundcloud-track-num*))
   (soundcloud-draw-now-playing)
   (soundcloud-play-track-id (gethash "id" *soundcloud-track*)))
 
@@ -388,13 +388,13 @@
 (defun soundcloud-play-track ()
   (interactive)
   (soundcloud-stop)
-  (setq *soundcloud-track-num* (- (get-current-line-result-number) 1))
+  (setq *soundcloud-track-num* (- (soundcloud-get-current-line-result-number) 1))
   (soundcloud-play-current-track)
   (beginning-of-line))
 
 (defun soundcloud-goto-artist ()
   (interactive)
-  (let ((result-num (get-current-line-result-number)))
+  (let ((result-num (soundcloud-get-current-line-result-number)))
     (soundcloud-load-artist-by-name (gethash "permalink" (elt *soundcloud-last-api-result* (- result-num 1))))
     (beginning-of-line)))
 
@@ -417,7 +417,7 @@
 (defun soundcloud-play-next-track ()
   (interactive)
   (when (equal t *soundcloud-playing*)
-    (if (or (= -1 *soundcloud-track-num*) (= (length (current-artist-tracks)) (+ 1 *soundcloud-track-num*)))
+    (if (or (= -1 *soundcloud-track-num*) (= (length (soundcloud-current-artist-tracks)) (+ 1 *soundcloud-track-num*)))
         (progn (setq *soundcloud-track* nil)
                (setq *soundcloud-playing* nil))
       (progn
