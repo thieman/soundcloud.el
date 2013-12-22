@@ -20,7 +20,7 @@ SoundCloud client in yo' Emacs. Available now on [MELPA](https://github.com/milk
     
 #### emms config
 
-If you've never used EMMS before, you'll need to add these lines to your `init.el`
+If you've never used emms before, you'll need to add these lines to your `init.el`
 
     (require 'emms-setup)
     (emms-standard)
