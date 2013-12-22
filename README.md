@@ -17,6 +17,14 @@ SoundCloud client in yo' Emacs. Available now on [MELPA](https://github.com/milk
 `soundcloud` is available on [MELPA](https://github.com/milkypostman/melpa).
 
     M-x package-install <RET> soundcloud <RET>
+    
+#### emms config
+
+If you've never used EMMS before, you'll need to add these lines to your `init.el`
+
+    (require 'emms-setup)
+    (emms-standard)
+    (emms-default-players)
 
 ## Getting Started
 
