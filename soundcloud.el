@@ -42,6 +42,7 @@
 (require 'deferred)
 (require 'easymenu)
 (require 'string-utils)
+(require 'request-deferred)
 
 (emms-playing-time 1)
 (add-hook 'emms-player-finished-hook 'soundcloud-play-next-track)
@@ -167,6 +168,14 @@
     (kill-buffer buf))
   data)
 
+(defun soundcloud-get-location-from-request (buf)
+  (with-current-buffer buf
+    (goto-char (point-min))
+    (re-search-forward "^Location: " nil 'move)
+    (setq data (buffer-substring-no-properties (point) (line-end-position))))
+;;    (kill-buffer buf))
+  data)
+
 (defun soundcloud-get-json-from-request (buf)
   "Return JSON hash table from GET data within BUF.  Kill BUF."
   (let ((data (soundcloud-get-data-from-request buf)))
@@ -181,7 +190,15 @@
     (deferred:nextc it 'soundcloud-get-json-from-request)
     (deferred:nextc it
       (lambda (json-data)
-        (format "%s?client_id=%s" (gethash "stream_url" json-data) soundcloud-client-id)))))
+        (format "%s?client_id=%s" (gethash "stream_url" json-data) soundcloud-client-id)))
+    (deferred:nextc it
+      (lambda (url)
+        (message "%S" url)
+        (deferred:url-retrieve url)))
+    (deferred:nextc it
+      (lambda (buf)
+        (let ((original-url (soundcloud-get-location-from-request buf)))
+          (replace-regexp-in-string "^https" "http" original-url))))))
 
 (defun soundcloud-play-track-id (track-id)
   "Start playing the track with the given TRACK-ID."
@@ -189,6 +206,7 @@
     (soundcloud-get-stream-url track-id)
     (deferred:nextc it
       (lambda (stream-url)
+        (message stream-url)
         (emms-play-url stream-url)))
     (deferred:error it
       (lambda (err)
@@ -198,12 +216,14 @@
 (defun soundcloud-resolve-permalink (permalink)
   "Return full artist endpoint based on the given PERMALINK."
   (deferred:$
-    (deferred:url-retrieve (format "%s/resolve.json?url=%s&client_id=%s"
-                                   soundcloud-api permalink soundcloud-client-id))
-    (deferred:nextc it 'soundcloud-get-json-from-request)
+    (request-deferred (format "%s/resolve.json?url=%s&client_id=%s"
+                              soundcloud-api permalink soundcloud-client-id)
+                      :parser (lambda ()
+                                (let ((json-object-type 'hash-table))
+                                  (json-read))))
     (deferred:nextc it
-      (lambda (data)
-        (gethash "location" data)))
+      (lambda (response)
+        (request-response-url response)))
     (deferred:error it
       (lambda (err)
         (error "Error while resolving artist permalink, try using artist search instead")))))
