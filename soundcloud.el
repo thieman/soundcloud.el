@@ -7,7 +7,7 @@
 
 ;; Package: soundcloud
 ;; Version: 20131210
-;; Package-Requires: ((emms "20131016") (json "1.2") (deferred "0.3.1") (string-utils "0.3.2"))
+;; Package-Requires: ((emms "20131016") (json "1.2") (deferred "0.3.1") (string-utils "0.3.2") (request "20140316.417") (request-deferred "20130526.1015"))
 ;; Keywords: soundcloud music audio
 
 ;; This code is licensed under the WTFPL.
@@ -193,7 +193,6 @@
         (format "%s?client_id=%s" (gethash "stream_url" json-data) soundcloud-client-id)))
     (deferred:nextc it
       (lambda (url)
-        (message "%S" url)
         (deferred:url-retrieve url)))
     (deferred:nextc it
       (lambda (buf)
@@ -206,7 +205,6 @@
     (soundcloud-get-stream-url track-id)
     (deferred:nextc it
       (lambda (stream-url)
-        (message stream-url)
         (emms-play-url stream-url)))
     (deferred:error it
       (lambda (err)
